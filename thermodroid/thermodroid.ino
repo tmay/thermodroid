@@ -59,54 +59,31 @@ int a_ij[64];
 
 //(0x40...0x7F:64...127)Individual Ta dependence (slope) of IR pixels offset
 int b_ij[64];
-const byte READY = 100;
 
-const unsigned int PREAMBLE     =  0x0;
-const unsigned int SET_UP    =  0x1;
-const unsigned int RUN      =  0x2;
-int state = PREAMBLE;
-boolean isFirstRun = true;
+const byte DUMP_EEPROM = 100;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Start Up");
   i2c_init();
-  delay(10);
-  readEEPROM();
-  initDeviceVars(EEPROM_DATA);
-  delay(10);
-  Serial.println("Power ON");
   acc.powerOn();
+  Serial.println("Power ON");
 }
-int i = 0;
+
 void loop() {
   
   byte msg[3];
   int value = 10;
   if (acc.isConnected()) {
-    boolean hasNessage = acc.read(msg, sizeof(msg), 1) > 0;
-    switch(state) {
-      case PREAMBLE:
-        if (hasNessage) {
-          if (msg[0] == READY) {
-            Serial.print("Connected device says it's ready");
-            state = SET_UP; 
-          }
-        }
-        break;
-      case SET_UP:
-        Serial.println("SENDING EEPROM DATA");
-        acc.write(EEPROM_DATA, sizeof(EEPROM_DATA)-1);
-        delay(100);
-        state = RUN;
-        break;
-      case RUN:
-        if (isFirstRun) {
-          Serial.println("RUN MODE");
-          isFirstRun = false;
-        }
-        
-        break; 
+    boolean hasMessage = acc.read(msg, sizeof(msg), 1) > 0;
+    if (hasMessage) {
+      switch(msg[0]) {
+        case DUMP_EEPROM:
+          Serial.println("READING EEPROM DATA");
+          readEEPROM();
+          Serial.println("SENDING EEPROM DATA");
+          acc.write(EEPROM_DATA, sizeof(EEPROM_DATA)-1);
+          break;
+      }  
     }
   } else {
     //no connection, wat do?
