@@ -151,13 +151,37 @@ public class MainActivity extends Activity implements Runnable {
     
     
     public void run() {
+        Header header = new Header();
         int ret = 0;
+        //byte[] buffer = new byte[16384];
         byte[] buffer = new byte[16384];
+        byte[] headerBuffer = new byte[4];
         int i;
+        
+        //when ret is -1 there no more data 
+        try {
+            mInputStream.read(headerBuffer, 0, 4);
+            header = new Header(headerBuffer);
+            updateOutput(header.toString());
+            buffer = new byte[header.getFrameSize()];
+            mInputStream.read(buffer, 0, header.getFrameSize());
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
 
+        switch(header.getCommand()) {
+            case DUMP_EEPROM:
+                eepromData = new EEPROMData(buffer); 
+                updateOutput(eepromData.toString());
+                break;
+        }
+        
+        /*
         while (ret >= 0) {
             try {
-                ret = mInputStream.read(buffer);
+
+                //ret = mInputStream.read(buffer, 4, header.getFrameSize());
             } catch (IOException e) {
                 updateOutput("IO EXCEPTION");
                 updateOutput(e.getMessage());
@@ -168,7 +192,11 @@ public class MainActivity extends Activity implements Runnable {
             i = 0;
             while (i < ret) {
                 int len = ret - i;
-                switch(mCommand) {
+                int value = (int)buffer[i];
+                updateOutput(Integer.toHexString(i)+":"+Integer.toString(value));
+                i += 1;
+               
+                switch(header.getCommand()) {
                   case DUMP_EEPROM:
                       int value = (int)buffer[i];
                       //updateOutput(Integer.toHexString(i)+":"+Integer.toString(value));
@@ -176,7 +204,7 @@ public class MainActivity extends Activity implements Runnable {
                       break;
                 }
                 i += 1;
-                /*
+                
                 if (len >= 1) {
                     Message m = Message.obtain(mHandler);
                     int value = (int)buffer[i];
@@ -184,11 +212,11 @@ public class MainActivity extends Activity implements Runnable {
                     updateOutput(Integer.toHexString(i)+":"+Integer.toString(value));
                     //mHandler.sendMessage(m);
                 }
-                */
+                
                 //i += 1; num of bytes from arduino
             }
 
-        }
+        }*/
     }
 
     Handler mHandler = new Handler() {

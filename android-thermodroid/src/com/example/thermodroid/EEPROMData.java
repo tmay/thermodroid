@@ -20,11 +20,27 @@ public class EEPROMData {
 
     
     private TreeMap<Integer, Integer> data;
-    
+
     public EEPROMData() {
-      data = new TreeMap<Integer, Integer>();    
+    
+    }
+    
+    public EEPROMData(byte[] source) {
+      data = new TreeMap<Integer, Integer>(); 
+      
+      for (int i = 0; i < source.length; i++) {
+          addRegister(i, source[i]);
+      }
     }
 
+    public String toString() {
+        String res = "";
+        for (int i=0; i < data.size(); i++) {
+            res += "Register: "+Integer.toString(i)+" Value: "+Integer.toString(data.get(i));
+            res += "\n";
+        }
+        return res;
+    }
     //TODO: check datasheet to verify int is a good type to use here
     public void addRegister(int address, int value) {
         data.put(address, value);

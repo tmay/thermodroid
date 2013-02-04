@@ -12,9 +12,9 @@ AndroidAccessory acc("DetroitLabs",
 
 //consts
 int I2C_DEVICE_ID  =  0xA0;
-
+unsigned int BYTE_OFFSET = 4;
 //mem
-byte EEPROM_DATA[256];
+byte EEPROM_DATA[300];
 
 //device vars
 int PIX, CPIX;
@@ -61,6 +61,7 @@ int a_ij[64];
 int b_ij[64];
 
 const byte DUMP_EEPROM = 100;
+const byte SIZE = 10;
 
 void setup() {
   Serial.begin(115200);
@@ -80,6 +81,7 @@ void loop() {
         case DUMP_EEPROM:
           Serial.println("READING EEPROM DATA");
           readEEPROM();
+          writeHeader(EEPROM_DATA, DUMP_EEPROM, 256);
           Serial.println("SENDING EEPROM DATA");
           acc.write(EEPROM_DATA, sizeof(EEPROM_DATA)-1);
           break;
@@ -90,6 +92,19 @@ void loop() {
   }
 }
 
+byte *writeHeader(byte *buffer, byte command, short numOfBytes) {
+  byte sizeOfData[2];
+  sizeOfData[1] = (numOfBytes >> 8);
+  sizeOfData[0] = (numOfBytes & 255); 
+  
+  buffer[0] = 0x7E;
+  buffer[1] = command;
+  buffer[2] = sizeOfData[0];
+  buffer[3] = sizeOfData[1];
+  
+  return buffer;
+}
+
 void readEEPROM() {
   i2c_start_wait(I2C_DEVICE_ID);
   //Dump command 
@@ -98,7 +113,7 @@ void readEEPROM() {
   i2c_rep_start(0xA1);
   Serial.println("Start EEPROM Read");
   for(int i=0; i<256; i++) {
-    EEPROM_DATA[i] = i2c_readAck();
+    EEPROM_DATA[i+BYTE_OFFSET] = i2c_readAck();
   }
   i2c_stop();  
 }
