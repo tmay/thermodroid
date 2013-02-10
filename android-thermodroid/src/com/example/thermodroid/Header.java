@@ -1,5 +1,8 @@
 package com.example.thermodroid;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 public class Header {
     final private int COMMAND_INDEX         =   1;
     final private int FRAME_SIZE_INDEX_H    =   2;
@@ -19,11 +22,15 @@ public class Header {
         return mSource[COMMAND_INDEX];
     }
     
-    public int getFrameSize() {
-        return (mSource[FRAME_SIZE_INDEX_L] << 8) + mSource[FRAME_SIZE_INDEX_H];
+    public short getFrameSize() {
+        ByteBuffer bb = ByteBuffer.allocate(2);
+        bb.order(ByteOrder.LITTLE_ENDIAN);
+        bb.put(mSource[FRAME_SIZE_INDEX_H]);
+        bb.put(mSource[FRAME_SIZE_INDEX_L]);
+        return bb.getShort(0);
     }
     
     public String toString() {
-        return "COMMAND: "+Integer.toString(getCommand())+" SIZE: "+Integer.toString(getFrameSize());
+        return "COMMAND: "+Integer.toString(getCommand())+" SIZE: "+Short.toString(getFrameSize());
     }
 }

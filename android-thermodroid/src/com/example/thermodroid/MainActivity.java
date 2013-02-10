@@ -4,6 +4,7 @@ import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.DatagramPacket;
 
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -24,6 +25,8 @@ import android.widget.TextView;
 public class MainActivity extends Activity implements Runnable {
 
     final private static byte DUMP_EEPROM   =   100;
+    final private static byte WRITE_TRIM    =   101;
+    final private static byte ACK           =   104; //10-4 good buddy!
     
     private UsbManager mUsbManager;
     
@@ -125,11 +128,12 @@ public class MainActivity extends Activity implements Runnable {
             mAccessory = accessory;
             FileDescriptor fd = mFileDescriptor.getFileDescriptor();
             mInputStream = new FileInputStream(fd);
+            
             mOutputStream = new FileOutputStream(fd);
             Thread thread = new Thread(null, this, "ThermoDroid");
             thread.start();
-            updateOutput("File Descriptor is not null");
-            sendCommand(DUMP_EEPROM, (byte) 2 , 3);
+            updateOutput("Connect");
+            init();
         } else {
             
             updateOutput("File Descriptor is null");
@@ -149,76 +153,70 @@ public class MainActivity extends Activity implements Runnable {
         }
     }
     
-    
+    public void init() {
+      sendCommand(DUMP_EEPROM, (byte) 0 , 0);
+    }
+    /*    
+    public void run() {
+        int bytesAvailable = 0;
+        byte[] buffer = new byte[16384];
+        int bytesRead;
+        
+        while (bytesAvailable >= 0) {
+            try {
+                bytesAvailable = mInputStream.read(buffer);   
+            } catch (IOException e) {
+                break;
+            }         
+            bytesRead = 0;
+            
+            while(bytesRead < bytesAvailable) {
+                updateOutput(Byte.toString(buffer[bytesRead]));
+                bytesRead += 1;
+            }
+        }
+        
+    }
+*/
     public void run() {
         Header header = new Header();
         int ret = 0;
         //byte[] buffer = new byte[16384];
         byte[] buffer = new byte[16384];
         byte[] headerBuffer = new byte[4];
-        int i;
+        int i = 0;
         
         //when ret is -1 there no more data 
         try {
-            mInputStream.read(headerBuffer, 0, 4);
+            i += mInputStream.read(headerBuffer, 0, 4);
+            for (int j=0; j<headerBuffer.length;j++) {
+                updateOutput(Byte.toString(headerBuffer[j]));
+            }
+            updateOutput("\n\n");
+            
             header = new Header(headerBuffer);
             updateOutput(header.toString());
             buffer = new byte[header.getFrameSize()];
-            mInputStream.read(buffer, 0, header.getFrameSize());
+            i += mInputStream.read(buffer, 0, header.getFrameSize());
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
-
+        
+        
         switch(header.getCommand()) {
             case DUMP_EEPROM:
                 eepromData = new EEPROMData(buffer); 
                 updateOutput(eepromData.toString());
+                sendCommand(ACK, (byte) 0 , 0);
+                break;
+            case ACK:
+                updateOutput("ACK"+Integer.toString(buffer[0]));
                 break;
         }
         
-        /*
-        while (ret >= 0) {
-            try {
-
-                //ret = mInputStream.read(buffer, 4, header.getFrameSize());
-            } catch (IOException e) {
-                updateOutput("IO EXCEPTION");
-                updateOutput(e.getMessage());
-                break;
-                
-            }
-
-            i = 0;
-            while (i < ret) {
-                int len = ret - i;
-                int value = (int)buffer[i];
-                updateOutput(Integer.toHexString(i)+":"+Integer.toString(value));
-                i += 1;
-               
-                switch(header.getCommand()) {
-                  case DUMP_EEPROM:
-                      int value = (int)buffer[i];
-                      //updateOutput(Integer.toHexString(i)+":"+Integer.toString(value));
-                      eepromData.addRegister(i, value);
-                      break;
-                }
-                i += 1;
-                
-                if (len >= 1) {
-                    Message m = Message.obtain(mHandler);
-                    int value = (int)buffer[i];
-                    //m.obj = new EEPROMData("f", value);
-                    updateOutput(Integer.toHexString(i)+":"+Integer.toString(value));
-                    //mHandler.sendMessage(m);
-                }
-                
-                //i += 1; num of bytes from arduino
-            }
-
-        }*/
     }
-
+    
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -271,6 +269,17 @@ public class MainActivity extends Activity implements Runnable {
         }
     };
   
+    private void clearOutput() {
+        runOnUiThread(new Runnable() {
+            
+            @Override
+            public void run() {
+                outputBuffer = "";
+                output.setText(outputBuffer);        
+            }
+        });
+    }
+    
     private void updateOutput(final String msg) {
         runOnUiThread(new Runnable() {
             

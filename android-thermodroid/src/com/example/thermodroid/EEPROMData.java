@@ -1,5 +1,7 @@
 package com.example.thermodroid;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.TreeMap;
 
 
@@ -7,29 +9,31 @@ public class EEPROMData {
 
     //VTH0 of absolute temperature sensor
     //calculated from (Vth_H:0xDB(219) & Vth_L:0xDA(218))
-    final private static int Vth_H = 0xD8;
-    final private static int Vth_L = 0xDA;
+    final private static int Vth_H = 219;
+    final private static int Vth_L = 218;
     //KT1 of absolute temperature sensor
     //calculated from (Kt1_H:0xDD(221) & Kt1_L:0xDC(220))
-    final private static int Kt1_H = 0xDD;
-    final private static int Kt1_L = 0xDC;
+    final private static int Kt1_H = 221;
+    final private static int Kt1_L = 220;
     //KT2 of absolute temperature sensor
     //calculated from (Kt2_H:0xDF(223) & Kt2_L:0xDE(222))
-    final private static int Kt2_H = 0xDF;
-    final private static int Kt2_L = 0xDE;
+    final private static int Kt2_H = 223;
+    final private static int Kt2_L = 222;
 
     
     private TreeMap<Integer, Integer> data;
-
+    private byte[] mSource;
+    
     public EEPROMData() {
     
     }
     
     public EEPROMData(byte[] source) {
+      mSource = source;
       data = new TreeMap<Integer, Integer>(); 
       
       for (int i = 0; i < source.length; i++) {
-          addRegister(i, source[i]);
+          addRegister(i, Integer.valueOf(source[i] & 0xff) );
       }
     }
 
@@ -39,6 +43,14 @@ public class EEPROMData {
             res += "Register: "+Integer.toString(i)+" Value: "+Integer.toString(data.get(i));
             res += "\n";
         }
+        res += "V_th: "+Integer.toString(getV_th());
+        res += "K_t1: "+Double.toString(getK_t1());
+        res += "K_t2: "+Double.toString(getK_t2());
+        res += "A_cp: "+Double.toString(getA_cp());
+        res += "B_cp: "+Double.toString(getB_cp());
+        res += "TGC: "+Double.toString(getTGC());
+        res += "BIScale: "+Double.toString(getB_I_Scale());
+        res += "Emissivity: "+Double.toString(getEmissivity());
         return res;
     }
     //TODO: check datasheet to verify int is a good type to use here
@@ -46,12 +58,12 @@ public class EEPROMData {
         data.put(address, value);
     }
     
-    public void getRegister(int address) {
-        data.get(address);
+    public int getRegister(int address) {
+        return data.get(address);
     }
     
     public int getV_th() {
-        return (data.get(Vth_H) <<8) + data.get(Vth_L);
+        return (mSource[Vth_H] << 8) + mSource[Vth_L];
     }
     
     public double getK_t1() {
@@ -87,7 +99,7 @@ public class EEPROMData {
     }
     
     public double getEmissivity() {
-        return (data.get(229) <<8) + data.get(228)/32768.0;
+        return ((mSource[229] & 0xFF) << 8 ) + mSource[228]/32768.0;
     }
     
     //(0x00...0x3F:0...63)IR pixel individual offset coefficient
