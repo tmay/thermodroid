@@ -1,11 +1,21 @@
+#include <i2cmaster.h>
+#include <Max3421e.h>
+#include <Usb.h>
+#include <AndroidAccessory.h>
+
+AndroidAccessory acc("DetroitLabs",
+		     "ThermoDroid",
+		     "Non contact 64 zone temp sensor",
+		     "1.0",
+		     "http://www.detroitlabs.com",
+		     "0000000000000001");
+
 /*
  * Attention! I commented out the alpha_ij array, so if you're going to compile the sketch you'll get for sure an error.
  * You should replace all 64 values with the alpha_ij calculated using the values stored in your MLX90620's EEPROM. 
  * I suggest you to make an EEPROM dump, print it on the Serial port and store it in a file. From there, with the help of a spreadsheet (Libreoffice, Google Docs, Excel...) calculate your own alpha_ij values. 
  * Please also pay attention to your emissivity value: since in my case it was equal to 1, to save SRAM i cut out that piece of calculation. You need to restore those lines if your emissivity value is not equal to 1. 
  */
-
-#include <i2cmaster.h>
 
 int freq = 16;  //Set this value to your desired refresh frequency
 

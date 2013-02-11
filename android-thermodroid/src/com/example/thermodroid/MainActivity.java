@@ -12,6 +12,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
 import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
@@ -45,14 +46,19 @@ public class MainActivity extends Activity implements Runnable {
     private int mCommand;
     
     private EEPROMData eepromData;
+    private ThermoView view;
     
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        output = (TextView) findViewById(R.id.output);
+        view = new ThermoView(this);
+        view.setBackgroundColor(Color.WHITE);
+        setContentView(view);
+        //setContentView(R.layout.activity_main);
+        
+        //output = (TextView) findViewById(R.id.output);
         updateOutput("startup\n");
-        eepromData = new EEPROMData();
+        
         initUSB();
     }
 
@@ -156,7 +162,7 @@ public class MainActivity extends Activity implements Runnable {
     public void init() {
       sendCommand(DUMP_EEPROM, (byte) 0 , 0);
     }
-    /*    
+        
     public void run() {
         int bytesAvailable = 0;
         byte[] buffer = new byte[16384];
@@ -177,46 +183,7 @@ public class MainActivity extends Activity implements Runnable {
         }
         
     }
-*/
-    public void run() {
-        Header header = new Header();
-        int ret = 0;
-        //byte[] buffer = new byte[16384];
-        byte[] buffer = new byte[16384];
-        byte[] headerBuffer = new byte[4];
-        int i = 0;
-        
-        //when ret is -1 there no more data 
-        try {
-            i += mInputStream.read(headerBuffer, 0, 4);
-            for (int j=0; j<headerBuffer.length;j++) {
-                updateOutput(Byte.toString(headerBuffer[j]));
-            }
-            updateOutput("\n\n");
-            
-            header = new Header(headerBuffer);
-            updateOutput(header.toString());
-            buffer = new byte[header.getFrameSize()];
-            i += mInputStream.read(buffer, 0, header.getFrameSize());
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        
-        
-        switch(header.getCommand()) {
-            case DUMP_EEPROM:
-                eepromData = new EEPROMData(buffer); 
-                updateOutput(eepromData.toString());
-                sendCommand(ACK, (byte) 0 , 0);
-                break;
-            case ACK:
-                updateOutput("ACK"+Integer.toString(buffer[0]));
-                break;
-        }
-        
-    }
-    
+
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -275,7 +242,7 @@ public class MainActivity extends Activity implements Runnable {
             @Override
             public void run() {
                 outputBuffer = "";
-                output.setText(outputBuffer);        
+                //output.setText(outputBuffer);        
             }
         });
     }
@@ -286,7 +253,7 @@ public class MainActivity extends Activity implements Runnable {
             @Override
             public void run() {
                 outputBuffer += msg + "\n";
-                output.setText(outputBuffer);                
+                //output.setText(outputBuffer);                
             }
         });
         
