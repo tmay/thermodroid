@@ -10,6 +10,10 @@ AndroidAccessory acc("DetroitLabs",
 		     "http://www.detroitlabs.com",
 		     "0000000000000001");
 
+const byte START_FLAG = 0x12;
+const byte END_FLAG = 0x13;
+const byte ESCAPE = 0x7D;
+
 /*
  * Attention! I commented out the alpha_ij array, so if you're going to compile the sketch you'll get for sure an error.
  * You should replace all 64 values with the alpha_ij calculated using the values stored in your MLX90620's EEPROM. 
@@ -236,4 +240,24 @@ void loop(){
   read_CPIX_Reg_MLX90620();
   calculate_TO();
   Temperatures_Serial_Transmit();
+}
+
+void frameData(byte* data) {
+  byte buffer[128];
+  int byteCount = 0;
+  //add header bytes
+  //number of bytes in the data
+  buffer[byteCount++] = sizeof(data);
+  //start frame
+  buffer[byteCount++] = START_FLAG;
+  
+  
+  for (int i=0; i < buffer[0]; i++) {
+      if (data[i] == START_FLAG || data[i] == END_FLAG || data[i] == ESCAPE) {
+        buffer[byteCount++] = ESCAPE;
+      }
+      buffer[byteCount++] = data[i];
+  }
+  buffer[byteCount++] = END_FLAG;
+  
 }
