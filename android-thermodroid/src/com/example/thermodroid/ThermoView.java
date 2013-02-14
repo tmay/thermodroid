@@ -2,9 +2,10 @@ package com.example.thermodroid;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
+import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 
 public class ThermoView extends View {
@@ -13,28 +14,51 @@ public class ThermoView extends View {
     
     Paint paint = new Paint();
     TempReading[] temps;
+    boolean randomize = true;
     
     public ThermoView(Context context) {
         super(context);
-        temps = new TempReading[64];
-        for (int i = 0; i < 64; i++) {
-            temps[i] = new TempReading(10.50f);
-        }
+        this.initFakeData(randomize);
     }
 
     public ThermoView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        // TODO Auto-generated constructor stub
+        this.initFakeData(randomize);
     }
 
     public ThermoView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
-        // TODO Auto-generated constructor stub
+        this.initFakeData(randomize);
     }
 
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        
+        if (event.getRawX() > 400) {
+            initFakeData(true);
+        } else {
+            initFakeData(false);
+        }
+        this.invalidate();
+        return true;
+    };
+    
+    private void initFakeData(boolean isRandom) {
+        float simTemp = -50.00f;
+        temps = new TempReading[64];
+        for (int i = 0; i < 64; i++) {
+            if (isRandom) {
+                temps[i] = new TempReading((float)Math.random()*300);
+            } else {
+                temps[i] = new TempReading(simTemp);
+                simTemp += 5.50f;
+            }
+        }
+    }
+    
     @Override
     public void onDraw(Canvas canvas) {
-        
         int totalWidth = LEFT_MARGIN;
         int totalHeight = TOP_MARGIN;
         int gap = 10;
@@ -49,9 +73,10 @@ public class ThermoView extends View {
               paint.setStrokeWidth(0);
               canvas.drawRect(totalWidth, totalHeight, totalWidth+width, totalHeight+height, paint);
               totalWidth += width + gap;
-              
+              count++;
           }
             totalHeight += height + gap;
+            
         }
     }
 }

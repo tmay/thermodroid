@@ -4,7 +4,6 @@ import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.DatagramPacket;
 
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -19,12 +18,16 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
-import android.util.Log;
 import android.view.Menu;
 import android.widget.TextView;
 
 public class MainActivity extends Activity implements Runnable {
 
+    //prtocol
+    final private static byte START_FLAG = 0x12;
+    final private static byte END_FLAG = 0x13;
+    final private static byte ESCAPE = 0x7D;
+    
     final private static byte DUMP_EEPROM   =   100;
     final private static byte WRITE_TRIM    =   101;
     final private static byte ACK           =   104; //10-4 good buddy!
@@ -164,20 +167,55 @@ public class MainActivity extends Activity implements Runnable {
     }
         
     public void run() {
-        int bytesAvailable = 0;
         byte[] buffer = new byte[16384];
-        int bytesRead;
+        byte[] frame = new byte[128];
+        int bytesAvailable = 0;
+        int frameByteCount = 0;
+        int bytesRead = 0;
+        boolean escaped = false;
         
+    main:
         while (bytesAvailable >= 0) {
             try {
                 bytesAvailable = mInputStream.read(buffer);   
             } catch (IOException e) {
-                break;
+                break main;
             }         
             bytesRead = 0;
             
+        read:
             while(bytesRead < bytesAvailable) {
-                updateOutput(Byte.toString(buffer[bytesRead]));
+                //updateOutput(Byte.toString(buffer[bytesRead]));
+                byte b = buffer[bytesRead];
+                switch (b) {
+                case ESCAPE:
+                    if (escaped) {
+                        frame[frameByteCount++] = b;
+                    } else {
+                        escaped = true;
+                    }
+                    continue read;
+                case START_FLAG:
+                    if (escaped) {
+                        frame[frameByteCount++] = b;
+                        escaped = false;
+                    } else {
+                        frameByteCount = 0;
+                        frame = new byte[128];
+                    }
+                    continue read;
+                case END_FLAG:
+                    if (escaped) {
+                        frame[frameByteCount++] = b;
+                        escaped = false;
+                    } else {
+                        //this is where the handler needs to be called with a complete frame
+                    }
+                    continue read;
+                default:
+                    frame[frameByteCount++] = b;
+                }
+                
                 bytesRead += 1;
             }
         }
