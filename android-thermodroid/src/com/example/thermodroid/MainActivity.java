@@ -31,7 +31,7 @@ public class MainActivity extends Activity implements Runnable {
     final private static byte DUMP_EEPROM   =   100;
     final private static byte WRITE_TRIM    =   101;
     final private static byte ACK           =   104; //10-4 good buddy!
-    
+    final private static byte READY         =   0x00;
     private UsbManager mUsbManager;
     
     private static final String ACTION_USB_PERMISSION = "com.google.android.DemoKit.action.USB_PERMISSION";
@@ -51,15 +51,24 @@ public class MainActivity extends Activity implements Runnable {
     private EEPROMData eepromData;
     private ThermoView view;
     
+    protected class IRDataMsg {
+        private byte[] data;
+        public IRDataMsg(byte[] data) {
+            this.data = data;
+        }
+        
+        
+    }
+    
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         view = new ThermoView(this);
         view.setBackgroundColor(Color.WHITE);
-        setContentView(view);
-        //setContentView(R.layout.activity_main);
+        //setContentView(view);
+        setContentView(R.layout.activity_main);
         
-        //output = (TextView) findViewById(R.id.output);
+        output = (TextView) findViewById(R.id.output);
         updateOutput("startup\n");
         
         initUSB();
@@ -163,12 +172,13 @@ public class MainActivity extends Activity implements Runnable {
     }
     
     public void init() {
-      sendCommand(DUMP_EEPROM, (byte) 0 , 0);
+      sendCommand(READY, (byte) 0 , 0);
     }
         
     public void run() {
+        /*
         byte[] buffer = new byte[16384];
-        byte[] frame = new byte[128];
+        byte[] frame = new byte[512];
         int bytesAvailable = 0;
         int frameByteCount = 0;
         int bytesRead = 0;
@@ -177,51 +187,53 @@ public class MainActivity extends Activity implements Runnable {
     main:
         while (bytesAvailable >= 0) {
             try {
-                bytesAvailable = mInputStream.read(buffer);   
+                bytesAvailable = mInputStream.available(); 
+                updateOutput(Integer.toString(bytesAvailable));
             } catch (IOException e) {
+                
                 break main;
             }         
             bytesRead = 0;
             
-        read:
+        
             while(bytesRead < bytesAvailable) {
-                //updateOutput(Byte.toString(buffer[bytesRead]));
+                updateOutput(Integer.toString(bytesRead));
                 byte b = buffer[bytesRead];
+                updateOutput(Integer.toString(frameByteCount)+" : "+Integer.toString(b & 0xff));
+                if (escaped) {
+                    frame[frameByteCount++] = b;
+                    escaped = false;
+                    bytesRead += 1;
+                    continue;
+                }
+
                 switch (b) {
                 case ESCAPE:
-                    if (escaped) {
-                        frame[frameByteCount++] = b;
-                    } else {
-                        escaped = true;
-                    }
-                    continue read;
+                    escaped = true;
+                    bytesRead += 1;
+                    break;
                 case START_FLAG:
-                    if (escaped) {
-                        frame[frameByteCount++] = b;
-                        escaped = false;
-                    } else {
-                        frameByteCount = 0;
-                        frame = new byte[128];
-                    }
-                    continue read;
+                    updateOutput("new Frame");
+                    frameByteCount = 0;
+                    frame = new byte[512];
+                    bytesRead += 1;
+                    break;
                 case END_FLAG:
-                    if (escaped) {
-                        frame[frameByteCount++] = b;
-                        escaped = false;
-                    } else {
-                        //this is where the handler needs to be called with a complete frame
-                    }
-                    continue read;
+                    //this is where the handler needs to be called with a complete frame
+                    //mHandler.
+                    clearOutput();
+                    break;
                 default:
                     frame[frameByteCount++] = b;
+                    bytesRead += 1;
                 }
-                
-                bytesRead += 1;
             }
         }
-        
+        */
     }
 
+
+    
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -280,7 +292,7 @@ public class MainActivity extends Activity implements Runnable {
             @Override
             public void run() {
                 outputBuffer = "";
-                //output.setText(outputBuffer);        
+                output.setText(outputBuffer);        
             }
         });
     }
@@ -291,7 +303,7 @@ public class MainActivity extends Activity implements Runnable {
             @Override
             public void run() {
                 outputBuffer += msg + "\n";
-                //output.setText(outputBuffer);                
+                output.setText(outputBuffer);                
             }
         });
         

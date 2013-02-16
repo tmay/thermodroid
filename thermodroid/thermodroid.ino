@@ -10,9 +10,10 @@ AndroidAccessory acc("DetroitLabs",
 		     "http://www.detroitlabs.com",
 		     "0000000000000001");
 
-const byte START_FLAG = 0x12;
-const byte END_FLAG = 0x13;
-const byte ESCAPE = 0x7D;
+byte START_FLAG = 0x12;
+byte END_FLAG = 0x13;
+byte ESCAPE = 0x7D;
+byte READY = 0x00;
 
 /*
  * Attention! I commented out the alpha_ij array, so if you're going to compile the sketch you'll get for sure an error.
@@ -210,40 +211,34 @@ void varInitialization(byte EEPROM_DATA[]){
   }
 }
 
+
+
 void Temperatures_Serial_Transmit(){
+  Serial.println("begin");
+  int byteCount = 0;
+  byte frame[512];
+  frame[byteCount++] = START_FLAG;
   for(int i=0;i<=63;i++){
-    Serial.println(temperatures[i]);
+    byte * b = (byte *) &temperatures[i];
+    for (int j=0; j<4; j++) {
+      if (b[j] == START_FLAG || b[j] == END_FLAG || b[j] == ESCAPE) {
+       frame[byteCount++] = ESCAPE; 
+      }
+      frame[byteCount++] = b[j];
+      //Serial.println(frame[byteCount]);
+    }
   }
+  frame[byteCount++] = END_FLAG;
+  Serial.println("sending");
+  acc.write(frame, byteCount);
 }
 
-void setup(){
-  pinMode(13, OUTPUT);
-  Serial.begin(115200);
-  i2c_init(); 
-  PORTC = (1 << PORTC4) | (1 << PORTC5);
-  delay(5);
-  read_EEPROM_MLX90620();
-  config_MLX90620_Hz(freq);
-}
 
-void loop(){
-  if(count ==0){		//TA refresh is slower than the pixel readings, I'll read the values and computate them not every loop. 
-    read_PTAT_Reg_MLX90620();
-    calculate_TA();
-    check_Config_Reg_MLX90620();
-  }
-  count++;
-  if(count >=16){
-    count = 0;
-  }
-  read_IR_ALL_MLX90620();
-  read_CPIX_Reg_MLX90620();
-  calculate_TO();
-  Temperatures_Serial_Transmit();
-}
 
-void frameData(byte* data) {
-  byte buffer[128];
+/*
+byte*
+frameData(byte* data) {
+  byte buffer[sizeof(data)];
   int byteCount = 0;
   //add header bytes
   //number of bytes in the data
@@ -259,5 +254,46 @@ void frameData(byte* data) {
       buffer[byteCount++] = data[i];
   }
   buffer[byteCount++] = END_FLAG;
-  
+  return buffer;
 }
+*/
+void setup(){
+  pinMode(13, OUTPUT);
+  Serial.begin(115200);
+  i2c_init(); 
+  PORTC = (1 << PORTC4) | (1 << PORTC5);
+  delay(5);
+  read_EEPROM_MLX90620();
+  config_MLX90620_Hz(freq);
+  acc.powerOn();
+  Serial.println("Power ON");
+}
+
+boolean isReady = false;
+
+void loop(){
+  byte command[3];
+  if(count ==0){		//TA refresh is slower than the pixel readings, I'll read the values and computate them not every loop. 
+    read_PTAT_Reg_MLX90620();
+    calculate_TA();
+    check_Config_Reg_MLX90620();
+  }
+  count++;
+  if(count >=16){
+    count = 0;
+  }
+  read_IR_ALL_MLX90620();
+  read_CPIX_Reg_MLX90620();
+  calculate_TO();
+  
+  if (acc.isConnected()) {
+      if (!isReady) {
+        boolean hasMessage = acc.read(command, sizeof(command), 1) > 0;
+        isReady = (hasMessage && command[0] == READY);
+      } else {
+        Temperatures_Serial_Transmit();
+    }
+  }
+}
+
+
