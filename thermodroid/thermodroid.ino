@@ -1,19 +1,25 @@
 #include <i2cmaster.h>
-#include <Max3421e.h>
-#include <Usb.h>
-#include <AndroidAccessory.h>
 
+/*
 AndroidAccessory acc("DetroitLabs",
 		     "ThermoDroid",
 		     "Non contact 64 zone temp sensor",
 		     "1.0",
 		     "http://www.detroitlabs.com",
 		     "0000000000000001");
+*/
+int tempPin = 0;
 
 byte START_FLAG = 0x12;
 byte END_FLAG = 0x13;
 byte ESCAPE = 0x7D;
-byte READY = 0x00;
+//arduino states
+const byte READY = 0x01;
+const byte IDLE = 0x02;
+const byte RUN = 0x03;
+
+//deafult state
+byte state = READY;
 
 /*
  * Attention! I commented out the alpha_ij array, so if you're going to compile the sketch you'll get for sure an error.
@@ -212,51 +218,6 @@ void varInitialization(byte EEPROM_DATA[]){
 }
 
 
-
-void Temperatures_Serial_Transmit(){
-  Serial.println("begin");
-  int byteCount = 0;
-  byte frame[512];
-  frame[byteCount++] = START_FLAG;
-  for(int i=0;i<=63;i++){
-    byte * b = (byte *) &temperatures[i];
-    for (int j=0; j<4; j++) {
-      if (b[j] == START_FLAG || b[j] == END_FLAG || b[j] == ESCAPE) {
-       frame[byteCount++] = ESCAPE; 
-      }
-      frame[byteCount++] = b[j];
-      //Serial.println(frame[byteCount]);
-    }
-  }
-  frame[byteCount++] = END_FLAG;
-  Serial.println("sending");
-  acc.write(frame, byteCount);
-}
-
-
-
-/*
-byte*
-frameData(byte* data) {
-  byte buffer[sizeof(data)];
-  int byteCount = 0;
-  //add header bytes
-  //number of bytes in the data
-  buffer[byteCount++] = sizeof(data);
-  //start frame
-  buffer[byteCount++] = START_FLAG;
-  
-  
-  for (int i=0; i < buffer[0]; i++) {
-      if (data[i] == START_FLAG || data[i] == END_FLAG || data[i] == ESCAPE) {
-        buffer[byteCount++] = ESCAPE;
-      }
-      buffer[byteCount++] = data[i];
-  }
-  buffer[byteCount++] = END_FLAG;
-  return buffer;
-}
-*/
 void setup(){
   pinMode(13, OUTPUT);
   Serial.begin(115200);
@@ -265,35 +226,70 @@ void setup(){
   delay(5);
   read_EEPROM_MLX90620();
   config_MLX90620_Hz(freq);
-  acc.powerOn();
-  Serial.println("Power ON");
 }
-
-boolean isReady = false;
 
 void loop(){
-  byte command[3];
-  if(count ==0){		//TA refresh is slower than the pixel readings, I'll read the values and computate them not every loop. 
-    read_PTAT_Reg_MLX90620();
-    calculate_TA();
-    check_Config_Reg_MLX90620();
+  if (Serial.peek() != -1) {  
+    do {
+      byte b = Serial.read();
+      state = b;
+      Serial.println(b,HEX);
+      //Serial.print((char) Serial.read());
+    } while (Serial.peek() != -1);
   }
-  count++;
-  if(count >=16){
-    count = 0;
-  }
-  read_IR_ALL_MLX90620();
-  read_CPIX_Reg_MLX90620();
-  calculate_TO();
-  
-  if (acc.isConnected()) {
-      if (!isReady) {
-        boolean hasMessage = acc.read(command, sizeof(command), 1) > 0;
-        isReady = (hasMessage && command[0] == READY);
-      } else {
-        Temperatures_Serial_Transmit();
-    }
+  switch(state) {
+    case READY:
+      //Serial.println("READY");
+      break;
+    case IDLE:
+      Idle_Serial_Transmit();
+      delay(1000);
+      break;
+    case RUN:
+      if(count ==0){		//TA refresh is slower than the pixel readings, I'll read the values and computate them not every loop. 
+         read_PTAT_Reg_MLX90620();
+         calculate_TA();
+         check_Config_Reg_MLX90620();
+      }
+      count++;
+      if(count >=16){
+        count = 0;
+      }
+      read_IR_ALL_MLX90620();
+      read_CPIX_Reg_MLX90620();
+      calculate_TO();
+      Temperatures_Serial_Transmit();
+      delay(1000);
+      break;
   }
 }
 
+void Send_Escaped_Data(byte b) {
+  if (b == START_FLAG  ||
+      b == END_FLAG    ||
+      b == ESCAPE) {
+        Serial.write(ESCAPE); 
+  }
+  Serial.write(b);    
+}
 
+void Temperatures_Serial_Transmit(){
+  Serial.write(START_FLAG);
+  for(int i=0;i<=63;i++){
+    byte * b = (byte *) &temperatures[i];
+    for (int j=0; j<4; j++) {
+      Send_Escaped_Data(b[j]);
+    }
+  }
+  Serial.write(END_FLAG);
+}
+
+void Idle_Serial_Transmit() {
+  Serial.write(START_FLAG);
+  delay(10);
+  Serial.write(END_FLAG);
+}
+
+float getVoltage(int pin) {
+ return (analogRead(tempPin) * .004882814); 
+}

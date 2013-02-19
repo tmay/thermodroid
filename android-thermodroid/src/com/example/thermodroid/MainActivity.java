@@ -28,10 +28,8 @@ public class MainActivity extends Activity implements Runnable {
     final private static byte END_FLAG = 0x13;
     final private static byte ESCAPE = 0x7D;
     
-    final private static byte DUMP_EEPROM   =   100;
-    final private static byte WRITE_TRIM    =   101;
-    final private static byte ACK           =   104; //10-4 good buddy!
-    final private static byte READY         =   0x00;
+
+    
     private UsbManager mUsbManager;
     
     private static final String ACTION_USB_PERMISSION = "com.google.android.DemoKit.action.USB_PERMISSION";
@@ -172,7 +170,7 @@ public class MainActivity extends Activity implements Runnable {
     }
     
     public void init() {
-      sendCommand(READY, (byte) 0 , 0);
+      //sendCommand(READY, (byte) 0 , 0);
     }
         
     public void run() {

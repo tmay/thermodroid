@@ -20,6 +20,7 @@ public final class R {
     }
     public static final class layout {
         public static final int activity_main=0x7f030000;
+        public static final int device_filter=0x7f030001;
     }
     public static final class menu {
         public static final int activity_main=0x7f070000;
@@ -35,5 +36,6 @@ public final class R {
     }
     public static final class xml {
         public static final int accessory_filter=0x7f040000;
+        public static final int device_filter=0x7f040001;
     }
 }
