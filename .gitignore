@@ -25,6 +25,7 @@ Podfile.lock
 
 # Android Specific
 #
+# built application files
 *.apk
 *.ap_
 
@@ -51,3 +52,8 @@ android/project.properties
 android/results
 android/tmp
 
+local.properties
+
+# Eclipse project files
+.classpath
+.project
