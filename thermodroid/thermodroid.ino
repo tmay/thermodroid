@@ -1,186 +1,104 @@
 #include <i2cmaster.h>
-#include <Max3421e.h>
-#include <Usb.h>
-#include <AndroidAccessory.h>
 
+/*
 AndroidAccessory acc("DetroitLabs",
 		     "ThermoDroid",
 		     "Non contact 64 zone temp sensor",
 		     "1.0",
 		     "http://www.detroitlabs.com",
 		     "0000000000000001");
+*/
+int tempPin = 0;
 
-//consts
-const int I2C_EEPROM_ID   =  0xA0;
-const int I2C_RAM_ID      =  0xC0;
-unsigned int BYTE_OFFSET = 4;
+byte START_FLAG = 0x12;
+byte END_FLAG = 0x13;
+byte ESCAPE = 0x7D;
+//arduino states
+const byte READY = 0x01;
+const byte IDLE = 0x02;
+const byte RUN = 0x03;
 
+//deafult state
+byte state = READY;
 
-//mem
-byte EEPROM_DATA[255];
+/*
+ * Attention! I commented out the alpha_ij array, so if you're going to compile the sketch you'll get for sure an error.
+ * You should replace all 64 values with the alpha_ij calculated using the values stored in your MLX90620's EEPROM. 
+ * I suggest you to make an EEPROM dump, print it on the Serial port and store it in a file. From there, with the help of a spreadsheet (Libreoffice, Google Docs, Excel...) calculate your own alpha_ij values. 
+ * Please also pay attention to your emissivity value: since in my case it was equal to 1, to save SRAM i cut out that piece of calculation. You need to restore those lines if your emissivity value is not equal to 1. 
+ */
 
-//device vars
-int PIX, CPIX;
-float emissivity;
+int freq = 16;  //Set this value to your desired refresh frequency
 
-//VTH0 of absolute temperature sensor
-//calculated from (Vth_H:0xDB(219) & Vth_L:0xDA(218))
-int v_th;
+int IRDATA[64];
+byte CFG_LSB, CFG_MSB, PTAT_LSB, PTAT_MSB, CPIX_LSB, CPIX_MSB, PIX_LSB, PIX_MSB;
+int PIX, v_th, CPIX;
+float ta, to, emissivity, k_t1, k_t2;
+float temperatures[64];
+int count=0;
+unsigned int PTAT;
+int a_cp, b_cp, tgc, b_i_scale;
 
-//KT1 of absolute temperature sensor
-//calculated from (Kt1_H:0xDD(221) & Kt1_L:0xDC(220))
-int k_t1;
-
-//KT2 of absolute temperature sensor
-//calculated from (Kt2_H:0xDF(223) & Kt2_L:0xDE(222))
-int k_t2;
-
-//Ambient Temperature measured from the chip – (the package temperature)
-float ta;
-
-//Object Temperature, ‘seen’ from IR sensor
-float to;
-
-//(0xD4:212)Compensation pixel individual offset coefficients 
-//2's complement
-int a_cp;
-
-//(0xD5:213)Individual Ta dependence (slope) of the compensation pixel offset
-//2's complement
-int b_cp;
-
-//(0xD8:216)Thermal gradient coefficient
-//2's complement
-int tgc;
-
-//(0xD9:217)Scaling coefficient for slope of IR pixels offset
-//unsigned
-int b_i_scale;
-
-//(0x00...0x3F:0...63)IR pixel individual offset coefficient
 int a_ij[64];
-
-//(0x40...0x7F:64...127)Individual Ta dependence (slope) of IR pixels offset
 int b_ij[64];
+float alpha_ij[64] = {1.591E-8, 1.736E-8, 1.736E-8, 1.620E-8, 1.783E-8, 1.818E-8, 1.992E-8, 1.748E-8, 1.864E-8, 2.056E-8, 2.132E-8, 2.033E-8, 2.097E-8, 2.324E-8, 2.388E-8, 2.161E-8, 2.155E-8, 2.394E-8, 2.353E-8, 2.068E-8, 2.353E-8, 2.633E-8, 2.708E-8, 2.394E-8, 2.499E-8, 2.778E-8, 2.731E-8, 2.580E-8, 2.539E-8, 2.796E-8, 2.871E-8, 2.598E-8, 2.586E-8, 2.801E-8, 2.830E-8, 2.633E-8, 2.609E-8, 2.894E-8, 2.924E-8, 2.633E-8, 2.464E-8, 2.778E-8, 2.894E-8, 2.673E-8, 2.475E-8, 2.737E-8, 2.796E-8, 2.679E-8, 2.394E-8, 2.708E-8, 2.714E-8, 2.644E-8, 2.347E-8, 2.563E-8, 2.493E-8, 2.388E-8, 2.179E-8, 2.440E-8, 2.504E-8, 2.295E-8, 2.033E-8, 2.283E-8, 2.295E-8, 2.155E-8};  //<-- REPLACE THIS VALUES WITH YOUR OWN!
+//float v_ir_off_comp[64];  //I'm going to merge v_ir_off_comp calculation into v_ir_tgc_comp equation. It's not required anywhere else, so I'll save 256 bytes of SRAM doing this.
+float v_ir_tgc_comp[64];
+//float v_ir_comp[64];		//removed to save SRAM, in my case v_ir_comp == v_ir_tgc_comp
 
-const byte DUMP_EEPROM =  100;
-const byte WRITE_TRIM  =  101;
-const byte ACK         =  104; //10-4 good buddy!
-byte flag[1];
 
-void setup() {
-  Serial.begin(115200);
-  i2c_init();
-  Serial.println("READING EEPROM DATA");
-  readEEPROM();
-  varInitialization();
-    for(int i=0; i<256; i++) {
-    Serial.print(i);
-    Serial.print(" : ");
-    Serial.println(EEPROM_DATA[i]);
+
+void config_MLX90620_Hz(int Hz){
+  byte Hz_LSB;
+  switch(Hz){
+    case 0:
+      Hz_LSB = B00001111;
+      break;
+    case 1:
+      Hz_LSB = B00001110;
+      break;
+    case 2:
+      Hz_LSB = B00001101;
+      break;
+    case 4:
+      Hz_LSB = B00001100;
+      break;
+    case 8:
+      Hz_LSB = B00001011;
+      break;
+    case 16:
+      Hz_LSB = B00001010;
+      break;
+    case 32:
+      Hz_LSB = B00001001;
+      break;
+    default:
+      Hz_LSB = B00001110;
   }
-  Serial.print("v_th: ");
-  Serial.println(v_th);
-  Serial.print("k_t1: ");
-  Serial.println(k_t1);
-  Serial.print("k_t2: ");
-  Serial.println(k_t2);
-  Serial.print("a_cp: ");
-  Serial.println(a_cp);
-  Serial.print("b_cp: ");
-  Serial.println(b_cp);
-  Serial.print("tgc: ");
-  Serial.println(tgc);
-  Serial.print("emissivity: ");
-  Serial.println(emissivity);
-  
-  delay(10);
-  Serial.print("TRIM VALUE: ");
-  Serial.println(EEPROM_DATA[247]);
-  write_trimming_value(EEPROM_DATA[247]);
-  delay(10);
-  flag[0] = 0x7E;
-  acc.powerOn();
-  Serial.println("Power ON");
+  i2c_start_wait(0xC0);
+  i2c_write(0x03);    
+  i2c_write((byte)Hz_LSB-0x55); 
+  i2c_write(Hz_LSB);   
+  i2c_write(0x1F);  
+  i2c_write(0x74);  
+  i2c_stop();
 }
 
-
-
-void loop() {
-    
-  byte command[3];
-  int value = 10;
-  if (acc.isConnected()) {
-    byte header[4];
-    boolean hasMessage = acc.read(command, sizeof(command), 1) > 0;
-    if (hasMessage) {
-      Serial.println("has message");
-      switch(command[0]) {
-        case DUMP_EEPROM:
-          writeHeader(header, DUMP_EEPROM, 256);
-          Serial.println("SENDING EEPROM DATA");
-          acc.write(header, sizeof(header));
-          delay(10);
-          acc.write(EEPROM_DATA, 256);
-          break;
-        case ACK:
-          writeHeader(header, ACK, 1);
-          Serial.println("Sending ACK");
-          byte ack[1];
-          ack[0] = ACK;
-          acc.write(ack, 1);
-          break;
-      }  
-    }
-  } else {
-    //no connection, wat do?
-  }
-  
-}
-
-void initFrameDelimiter() {
-  flag[0] = 0x00;
-  flag[1] = 0x00;
-  flag[2] = 0x7E;
-  flag[3] = 0x00;
-  flag[4] = 0x00;
-}
-
-void sendAck(byte command) {
-  byte ack[5];
-  ack[5] = command;
-  writeHeader(ack, ACK, 1);
-  acc.write(ack, 5); 
-}
-
-byte* writeHeader(byte* buffer, byte command, short numOfBytes) {
-  byte frameSize[2];
-  frameSize[0] = (numOfBytes >> 8);
-  frameSize[1] = (numOfBytes & 255); 
-  
-  buffer[0] = 0x7E;
-  buffer[1] = command;
-  buffer[2] = frameSize[1];
-  buffer[3] = frameSize[0];
-  
-  return buffer;
-}
-
-void readEEPROM() {
-  i2c_start_wait(I2C_EEPROM_ID);
-  //Dump command 
-  
+void read_EEPROM_MLX90620(){
+  byte EEPROM_DATA[256];
+  i2c_start_wait(0xA0);    
   i2c_write(0x00);
   i2c_rep_start(0xA1);
-  Serial.println("Start EEPROM Read");
-  for(int i=0; i<256; i++) {
+  for(int i=0;i<=255;i++){
     EEPROM_DATA[i] = i2c_readAck();
   }
-  i2c_stop();  
+  i2c_stop();
+  varInitialization(EEPROM_DATA);
+  write_trimming_value(EEPROM_DATA[247]);
 }
 
 void write_trimming_value(byte val){
-  i2c_start_wait(I2C_RAM_ID);
+  i2c_start_wait(0xC0);
   i2c_write(0x04); 
   i2c_write((byte)val-0xAA); 
   i2c_write(val);   
@@ -189,7 +107,83 @@ void write_trimming_value(byte val){
   i2c_stop();
 }
 
-void varInitialization(){
+void calculate_TA(){ 
+  ta = (-k_t1 + sqrt(square(k_t1) - (4 * k_t2 * (v_th - (float)PTAT))))/(2*k_t2) + 25; 	//it's much more simple now, isn't it? :)
+}
+
+void calculate_TO(){
+  float v_cp_off_comp = (float) CPIX - (a_cp + (b_cp/pow(2, b_i_scale)) * (ta - 25)); //this is needed only during the to calculation, so I declare it here.
+  
+  for (int i=0; i<64; i++){
+    v_ir_tgc_comp[i] = IRDATA[i] - (a_ij[i] + (float)(b_ij[i]/pow(2, b_i_scale)) * (ta - 25)) - (((float)tgc/32)*v_cp_off_comp);
+    //v_ir_comp[i]= v_ir_tgc_comp[i] / emissivity;									//removed to save SRAM, since emissivity in my case is equal to 1. 
+    //temperatures[i] = sqrt(sqrt((v_ir_comp[i]/alpha_ij[i]) + pow((ta + 273.15),4))) - 273.15;
+    temperatures[i] = sqrt(sqrt((v_ir_tgc_comp[i]/alpha_ij[i]) + pow((ta + 273.15),4))) - 273.15;	//edited to work with v_ir_tgc_comp instead of v_ir_comp
+  }
+}
+
+
+void read_IR_ALL_MLX90620(){
+  i2c_start_wait(0xC0);
+  i2c_write(0x02);      
+  i2c_write(0x00);     
+  i2c_write(0x01);       
+  i2c_write(0x40);       
+  i2c_rep_start(0xC1);
+  for(int i=0;i<=63;i++){
+    PIX_LSB = i2c_readAck(); 
+    PIX_MSB = i2c_readAck(); 
+    IRDATA[i] = (PIX_MSB << 8) + PIX_LSB;
+  }
+  i2c_stop();
+}
+
+void read_PTAT_Reg_MLX90620(){
+  i2c_start_wait(0xC0);
+  i2c_write(0x02);
+  i2c_write(0x90);
+  i2c_write(0x00);
+  i2c_write(0x01);
+  i2c_rep_start(0xC1);
+  PTAT_LSB = i2c_readAck();
+  PTAT_MSB = i2c_readAck();
+  i2c_stop();
+  PTAT = ((unsigned int)PTAT_MSB << 8) + PTAT_LSB;
+}
+
+void read_CPIX_Reg_MLX90620(){
+  i2c_start_wait(0xC0);
+  i2c_write(0x02);
+  i2c_write(0x91);
+  i2c_write(0x00);
+  i2c_write(0x01);
+  i2c_rep_start(0xC1);
+  CPIX_LSB = i2c_readAck();
+  CPIX_MSB = i2c_readAck();
+  i2c_stop();
+  CPIX = (CPIX_MSB << 8) + CPIX_LSB;
+}
+
+void read_Config_Reg_MLX90620(){
+  i2c_start_wait(0xC0);
+  i2c_write(0x02);
+  i2c_write(0x92);
+  i2c_write(0x00);
+  i2c_write(0x01);
+  i2c_rep_start(0xC1);
+  CFG_LSB = i2c_readAck();
+  CFG_MSB = i2c_readAck();
+  i2c_stop();
+}
+
+void check_Config_Reg_MLX90620(){
+  read_Config_Reg_MLX90620();
+  if ((!CFG_MSB & 0x04) == 0x04){
+    config_MLX90620_Hz(freq);
+  }
+}
+
+void varInitialization(byte EEPROM_DATA[]){
   v_th = (EEPROM_DATA[219] <<8) + EEPROM_DATA[218];
   k_t1 = ((EEPROM_DATA[221] <<8) + EEPROM_DATA[220])/1024.0;
   k_t2 =((EEPROM_DATA[223] <<8) + EEPROM_DATA[222])/1048576.0;
@@ -221,4 +215,80 @@ void varInitialization(){
       b_ij[i] = b_ij[i] - 256;
     }
   }
+}
+
+
+void setup(){
+  pinMode(13, OUTPUT);
+  Serial.begin(115200);
+  i2c_init(); 
+  PORTC = (1 << PORTC4) | (1 << PORTC5);
+  delay(5);
+  read_EEPROM_MLX90620();
+  config_MLX90620_Hz(freq);
+}
+
+void loop(){
+  if (Serial.peek() != -1) {  
+    do {
+      byte b = Serial.read();
+      state = b;
+      Serial.println(b,HEX);
+      //Serial.print((char) Serial.read());
+    } while (Serial.peek() != -1);
+  }
+  switch(state) {
+    case READY:
+      //Serial.println("READY");
+      break;
+    case IDLE:
+      Idle_Serial_Transmit();
+      delay(1000);
+      break;
+    case RUN:
+      if(count ==0){		//TA refresh is slower than the pixel readings, I'll read the values and computate them not every loop. 
+         read_PTAT_Reg_MLX90620();
+         calculate_TA();
+         check_Config_Reg_MLX90620();
+      }
+      count++;
+      if(count >=16){
+        count = 0;
+      }
+      read_IR_ALL_MLX90620();
+      read_CPIX_Reg_MLX90620();
+      calculate_TO();
+      Temperatures_Serial_Transmit();
+      break;
+  }
+}
+
+void Send_Escaped_Data(byte b) {
+  if (b == START_FLAG  ||
+      b == END_FLAG    ||
+      b == ESCAPE) {
+        Serial.write(ESCAPE); 
+  }
+  Serial.write(b);    
+}
+
+void Temperatures_Serial_Transmit(){
+  Serial.write(START_FLAG);
+  for(int i=0;i<=63;i++){
+    byte * b = (byte *) &temperatures[i];
+    for (int j=0; j<4; j++) {
+      Send_Escaped_Data(b[j]);
+    }
+  }
+  Serial.write(END_FLAG);
+}
+
+void Idle_Serial_Transmit() {
+  Serial.write(START_FLAG);
+  delay(10);
+  Serial.write(END_FLAG);
+}
+
+float getVoltage(int pin) {
+ return (analogRead(tempPin) * .004882814); 
 }

@@ -4,7 +4,6 @@ import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.DatagramPacket;
 
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -12,21 +11,24 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
 import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
-import android.util.Log;
 import android.view.Menu;
 import android.widget.TextView;
 
 public class MainActivity extends Activity implements Runnable {
 
-    final private static byte DUMP_EEPROM   =   100;
-    final private static byte WRITE_TRIM    =   101;
-    final private static byte ACK           =   104; //10-4 good buddy!
+    //prtocol
+    final private static byte START_FLAG = 0x12;
+    final private static byte END_FLAG = 0x13;
+    final private static byte ESCAPE = 0x7D;
+    
+
     
     private UsbManager mUsbManager;
     
@@ -45,14 +47,28 @@ public class MainActivity extends Activity implements Runnable {
     private int mCommand;
     
     private EEPROMData eepromData;
+    private ThermoView view;
+    
+    protected class IRDataMsg {
+        private byte[] data;
+        public IRDataMsg(byte[] data) {
+            this.data = data;
+        }
+        
+        
+    }
     
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        view = new ThermoView(this);
+        view.setBackgroundColor(Color.WHITE);
+        //setContentView(view);
         setContentView(R.layout.activity_main);
+        
         output = (TextView) findViewById(R.id.output);
         updateOutput("startup\n");
-        eepromData = new EEPROMData();
+        
         initUSB();
     }
 
@@ -154,68 +170,67 @@ public class MainActivity extends Activity implements Runnable {
     }
     
     public void init() {
-      sendCommand(DUMP_EEPROM, (byte) 0 , 0);
+      //sendCommand(READY, (byte) 0 , 0);
     }
-    /*    
-    public void run() {
-        int bytesAvailable = 0;
-        byte[] buffer = new byte[16384];
-        int bytesRead;
         
+    public void run() {
+        /*
+        byte[] buffer = new byte[16384];
+        byte[] frame = new byte[512];
+        int bytesAvailable = 0;
+        int frameByteCount = 0;
+        int bytesRead = 0;
+        boolean escaped = false;
+        
+    main:
         while (bytesAvailable >= 0) {
             try {
-                bytesAvailable = mInputStream.read(buffer);   
+                bytesAvailable = mInputStream.available(); 
+                updateOutput(Integer.toString(bytesAvailable));
             } catch (IOException e) {
-                break;
+                
+                break main;
             }         
             bytesRead = 0;
             
+        
             while(bytesRead < bytesAvailable) {
-                updateOutput(Byte.toString(buffer[bytesRead]));
-                bytesRead += 1;
+                updateOutput(Integer.toString(bytesRead));
+                byte b = buffer[bytesRead];
+                updateOutput(Integer.toString(frameByteCount)+" : "+Integer.toString(b & 0xff));
+                if (escaped) {
+                    frame[frameByteCount++] = b;
+                    escaped = false;
+                    bytesRead += 1;
+                    continue;
+                }
+
+                switch (b) {
+                case ESCAPE:
+                    escaped = true;
+                    bytesRead += 1;
+                    break;
+                case START_FLAG:
+                    updateOutput("new Frame");
+                    frameByteCount = 0;
+                    frame = new byte[512];
+                    bytesRead += 1;
+                    break;
+                case END_FLAG:
+                    //this is where the handler needs to be called with a complete frame
+                    //mHandler.
+                    clearOutput();
+                    break;
+                default:
+                    frame[frameByteCount++] = b;
+                    bytesRead += 1;
+                }
             }
         }
-        
+        */
     }
-*/
-    public void run() {
-        Header header = new Header();
-        int ret = 0;
-        //byte[] buffer = new byte[16384];
-        byte[] buffer = new byte[16384];
-        byte[] headerBuffer = new byte[4];
-        int i = 0;
-        
-        //when ret is -1 there no more data 
-        try {
-            i += mInputStream.read(headerBuffer, 0, 4);
-            for (int j=0; j<headerBuffer.length;j++) {
-                updateOutput(Byte.toString(headerBuffer[j]));
-            }
-            updateOutput("\n\n");
-            
-            header = new Header(headerBuffer);
-            updateOutput(header.toString());
-            buffer = new byte[header.getFrameSize()];
-            i += mInputStream.read(buffer, 0, header.getFrameSize());
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        
-        
-        switch(header.getCommand()) {
-            case DUMP_EEPROM:
-                eepromData = new EEPROMData(buffer); 
-                updateOutput(eepromData.toString());
-                sendCommand(ACK, (byte) 0 , 0);
-                break;
-            case ACK:
-                updateOutput("ACK"+Integer.toString(buffer[0]));
-                break;
-        }
-        
-    }
+
+
     
     Handler mHandler = new Handler() {
         @Override
