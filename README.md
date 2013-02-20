@@ -1,0 +1,4 @@
+thermodroid
+===========
+
+TODO: This README
