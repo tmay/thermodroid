@@ -2,6 +2,7 @@ package com.example.thermodroid;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.Iterator;
 
 import android.util.Log;
 
@@ -14,6 +15,11 @@ public class ThermoFrame {
         //frame.compact();
         temps.clear();
         while(frame.hasRemaining()) {
+            if (frame.limit() - frame.position() < 4) {
+                frame.clear();
+                break;
+            }
+            
             int[] f = new int[4];
             frame.get(f, 0, 4);
             
@@ -21,6 +27,11 @@ public class ThermoFrame {
             intbits = (f[3] << 24 | f[2] << 16 | f[1] << 8 | f[0]);
             temps.put(Float.intBitsToFloat(intbits));
         } 
+    }
+    
+    
+    public FloatBuffer getTemps() {
+        return temps.duplicate();
     }
     
     public String toFloatString() {

@@ -4,8 +4,13 @@ import android.graphics.Color;
 import android.util.Log;
 
 public class TempReading {
-    final private float DEVICE_MIN_TEMP   =   -50.00f;
-    final private float DEVICE_MAX_TEMP   =   300.00f;
+    
+    final public float DEVICE_MIN_TEMP     =   -50.00f;
+    final public float DEVICE_MAX_TEMP     =   300.00f;
+    
+    final public float NORMAL_MIN_TEMP     =     0.00f;
+    final public float NORMAL_MAX_TEMP     =   100.00f;
+    
     
     final private int MIN_TEMP_COLOR    =   Color.BLUE;
     final private int MAX_TEMP_COLOR    =   Color.RED;
@@ -30,7 +35,7 @@ public class TempReading {
     }
     
     public float getProportion() {
-        return (mReading / DEVICE_MAX_TEMP);
+        return (mReading / NORMAL_MAX_TEMP);
     }
 
     /** Returns an interpoloated color, between <code>a</code> and <code>b</code> */

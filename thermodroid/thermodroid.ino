@@ -259,7 +259,6 @@ void loop(){
       read_CPIX_Reg_MLX90620();
       calculate_TO();
       Temperatures_Serial_Transmit();
-      delay(1000);
       break;
   }
 }

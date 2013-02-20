@@ -2,6 +2,7 @@ package com.example.thermodroid;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -71,7 +72,7 @@ public class ThermoActivity extends Activity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         view = new ThermoView(this);
-        view.setBackgroundColor(Color.WHITE);
+        view.setBackgroundColor(Color.BLACK);
         setContentView(view);
         mUsbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
     }
@@ -184,7 +185,7 @@ public class ThermoActivity extends Activity {
             IntBuffer buff = IntBuffer.wrap((int[]) msg.obj, 0, msg.arg1);
             
             ThermoFrame frame = new ThermoFrame(buff);
-            Log.i(TAG, frame.toFloatString());
+            view.update(frame);
         }
     };
     
@@ -202,6 +203,7 @@ public class ThermoActivity extends Activity {
        // Log.i(TAG, message);        
         
         ByteBuffer inBuffer = ByteBuffer.wrap(data);
+        
         while(inBuffer.hasRemaining()) {
             
             int b = inBuffer.get() & 0xFF;

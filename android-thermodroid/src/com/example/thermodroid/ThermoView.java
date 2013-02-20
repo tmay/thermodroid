@@ -1,10 +1,11 @@
 package com.example.thermodroid;
 
+import java.nio.FloatBuffer;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -14,7 +15,7 @@ public class ThermoView extends View {
     
     Paint paint = new Paint();
     TempReading[] temps;
-    boolean randomize = true;
+    boolean randomize = false;
     
     public ThermoView(Context context) {
         super(context);
@@ -44,6 +45,16 @@ public class ThermoView extends View {
         return true;
     };
     
+    public void update(ThermoFrame data) {
+        FloatBuffer readings = data.getTemps();
+        readings.rewind();
+        temps = new TempReading[64];
+        for (int i = 0; i < 64; i++) {
+            temps[i] = new TempReading(readings.get());
+        }
+        this.invalidate();
+    }
+    
     private void initFakeData(boolean isRandom) {
         float simTemp = -50.00f;
         temps = new TempReading[64];
@@ -65,18 +76,16 @@ public class ThermoView extends View {
         int width = 60;
         int height = 60;
         int count = 0;
-        
-        for (int r = 0; r < 4; r++) {
-            totalWidth = LEFT_MARGIN;
-            for (int c = 0; c < 16; c++) {
-              paint.setColor(temps[count].getColor());
-              paint.setStrokeWidth(0);
-              canvas.drawRect(totalWidth, totalHeight, totalWidth+width, totalHeight+height, paint);
-              totalWidth += width + gap;
-              count++;
-          }
-            totalHeight += height + gap;
-            
+        for (int c=0; c<15;c++) {
+            totalWidth += width + gap;
+            totalHeight = TOP_MARGIN;
+            for (int r=0; r<4; r++) {
+                paint.setColor(temps[count].getColor());
+                paint.setStrokeWidth(0);
+                canvas.drawRect(totalWidth, totalHeight, totalWidth+width, totalHeight+height, paint);
+                totalHeight += height + gap;
+                count++;
+            }
         }
     }
 }
