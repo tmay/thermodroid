@@ -1,10 +1,7 @@
-package com.example.thermodroid;
+package com.terrymay.thermodroid.models;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
-import java.util.Iterator;
-
-import android.util.Log;
 
 public class ThermoFrame {
 
@@ -32,6 +29,10 @@ public class ThermoFrame {
     
     public FloatBuffer getTemps() {
         return temps.duplicate();
+    }
+    
+    public float getTempAvg() {
+        return 00.00f;
     }
     
     public String toFloatString() {

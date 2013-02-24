@@ -1,9 +1,16 @@
-package com.example.thermodroid;
+package com.terrymay.thermodroid.activites;
 
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+
+import com.terrymay.thermodroid.R;
+import com.terrymay.thermodroid.R.id;
+import com.terrymay.thermodroid.R.layout;
+import com.terrymay.thermodroid.R.menu;
+import com.terrymay.thermodroid.models.EEPROMData;
+import com.terrymay.thermodroid.views.ThermoView;
 
 import android.app.Activity;
 import android.app.PendingIntent;

@@ -1,7 +1,5 @@
-package com.example.thermodroid;
+package com.terrymay.thermodroid.models;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.TreeMap;
 
 

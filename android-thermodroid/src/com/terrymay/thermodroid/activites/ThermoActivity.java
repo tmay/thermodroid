@@ -1,8 +1,7 @@
-package com.example.thermodroid;
+package com.terrymay.thermodroid.activites;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,6 +21,10 @@ import android.view.MenuItem.OnMenuItemClickListener;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
+import com.terrymay.thermodroid.R;
+import com.terrymay.thermodroid.R.menu;
+import com.terrymay.thermodroid.models.ThermoFrame;
+import com.terrymay.thermodroid.views.ThermoView;
 
 public class ThermoActivity extends Activity {
     private final String TAG = ThermoActivity.class.getSimpleName();
