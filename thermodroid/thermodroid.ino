@@ -222,10 +222,11 @@ void setup(){
   pinMode(13, OUTPUT);
   Serial.begin(115200);
   i2c_init(); 
-  PORTC = (1 << PORTC4) | (1 << PORTC5);
+  //PORTC = (1 << PORTC4) | (1 << PORTC5);
   delay(5);
   read_EEPROM_MLX90620();
   config_MLX90620_Hz(freq);
+  Serial.println("SETUP COMPLETE");
 }
 
 void loop(){
@@ -237,6 +238,7 @@ void loop(){
       //Serial.print((char) Serial.read());
     } while (Serial.peek() != -1);
   }
+  
   switch(state) {
     case READY:
       //Serial.println("READY");

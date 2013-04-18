@@ -4,6 +4,7 @@ import java.nio.FloatBuffer;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -19,7 +20,8 @@ public class ThermoView extends View {
     final private int TOP_MARGIN = 150;
     
     Paint paint = new Paint();
-    TempReading[] temps;
+    TempReading[] temps; 
+    float avgTemp = 0.00f;
     boolean randomize = false;
     
     public ThermoView(Context context) {
@@ -53,6 +55,8 @@ public class ThermoView extends View {
     
     public void update(ThermoFrame data) {
         FloatBuffer readings = data.getTemps();
+        avgTemp = data.getTempAvg();
+        Log.i("avg", Float.toString(avgTemp));
         readings.rewind();
         temps = new TempReading[64];
         for (int i = 0; i < 64; i++) {
@@ -93,10 +97,10 @@ public class ThermoView extends View {
                 count++;
             }
         }
-        drawLegend(canvas);
+        drawLegend(canvas, (avgTemp/TempReading.NORMAL_MAX_TEMP));
     }
     
-    private void drawLegend(Canvas canvas) {
+    private void drawLegend(Canvas canvas, float avgProportion) {
         int top = TOP_MARGIN + 350;
         int left = LEFT_MARGIN+70;
         float width = 1040.00f;
@@ -104,8 +108,14 @@ public class ThermoView extends View {
         
         for (int c=0; c<width; c++) {
             float proportion = ((left+c)/width);
-            paint.setColor(ColorUtility.interpolateColor(TempReading.MIN_TEMP_COLOR, TempReading.MAX_TEMP_COLOR, proportion));
-            paint.setStrokeWidth(0);
+            if (proportion < avgProportion) {
+                paint.setColor(Color.RED);
+                paint.setStrokeWidth(3);
+            } else {
+                paint.setColor(ColorUtility.interpolateColor(TempReading.MIN_TEMP_COLOR, TempReading.MAX_TEMP_COLOR, proportion));
+                paint.setStrokeWidth(0);
+            }
+            
             canvas.drawLine((left+c), top, (left+c), (top+height), paint);
         }
         
