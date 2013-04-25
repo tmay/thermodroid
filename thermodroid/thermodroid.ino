@@ -221,27 +221,29 @@ void varInitialization(byte EEPROM_DATA[]){
 void setup(){
   pinMode(13, OUTPUT);
   Serial.begin(115200);
+  Serial1.begin(115200);
+  Serial.println("SETUP COMPLETE");
   i2c_init(); 
   //PORTC = (1 << PORTC4) | (1 << PORTC5);
   delay(5);
   read_EEPROM_MLX90620();
   config_MLX90620_Hz(freq);
-  Serial.println("SETUP COMPLETE");
+  
 }
 
 void loop(){
-  if (Serial.peek() != -1) {  
+  if (Serial1.peek() != -1) {  
     do {
-      byte b = Serial.read();
+      byte b = Serial1.read();
       state = b;
       Serial.println(b,HEX);
       //Serial.print((char) Serial.read());
-    } while (Serial.peek() != -1);
+    } while (Serial1.peek() != -1);
   }
   
   switch(state) {
     case READY:
-      //Serial.println("READY");
+      //Serial1.println("READY");
       break;
     case IDLE:
       Idle_Serial_Transmit();
@@ -269,26 +271,27 @@ void Send_Escaped_Data(byte b) {
   if (b == START_FLAG  ||
       b == END_FLAG    ||
       b == ESCAPE) {
-        Serial.write(ESCAPE); 
+        Serial1.write(ESCAPE); 
   }
-  Serial.write(b);    
+  Serial1.write(b);    
 }
 
 void Temperatures_Serial_Transmit(){
-  Serial.write(START_FLAG);
+  Serial1.write(START_FLAG);
   for(int i=0;i<=63;i++){
     byte * b = (byte *) &temperatures[i];
     for (int j=0; j<4; j++) {
       Send_Escaped_Data(b[j]);
     }
   }
-  Serial.write(END_FLAG);
+  Serial1.write(END_FLAG);
+  //Serial.println("send");
 }
 
 void Idle_Serial_Transmit() {
-  Serial.write(START_FLAG);
+  Serial1.write(START_FLAG);
   delay(10);
-  Serial.write(END_FLAG);
+  Serial1.write(END_FLAG);
 }
 
 float getVoltage(int pin) {

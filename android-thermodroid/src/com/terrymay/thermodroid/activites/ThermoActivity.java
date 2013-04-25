@@ -1,15 +1,18 @@
 package com.terrymay.thermodroid.activites;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.UUID;
 
 import android.app.Activity;
-import android.content.Context;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.Intent;
 import android.graphics.Color;
-import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -18,18 +21,17 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MenuItem.OnMenuItemClickListener;
 
-import com.hoho.android.usbserial.driver.UsbSerialDriver;
-import com.hoho.android.usbserial.driver.UsbSerialProber;
-import com.hoho.android.usbserial.util.SerialInputOutputManager;
 import com.terrymay.thermodroid.R;
-import com.terrymay.thermodroid.R.menu;
 import com.terrymay.thermodroid.models.ThermoFrame;
 import com.terrymay.thermodroid.views.ThermoView;
 
-public class ThermoActivity extends Activity {
+public class ThermoActivity extends Activity implements Runnable {
     private final String TAG = ThermoActivity.class.getSimpleName();
     
-    //prtocol
+    //IDs
+    final private static UUID THERMO_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    
+    //protocol
     final private static byte START_FLAG = 0x12;
     final private static byte END_FLAG = 0x13;
     final private static byte ESCAPE = 0x7D;
@@ -42,23 +44,8 @@ public class ThermoActivity extends Activity {
     //handler ids
     final private static int NEW_FRAME = 100;
     
-    private UsbSerialDriver mSerialDevice;
-    private UsbManager mUsbManager;
-    
-    private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
 
-    private SerialInputOutputManager mSerialIoManager;
-
-    private final SerialInputOutputManager.Listener mListener =
-            new SerialInputOutputManager.Listener() {
-
-        @Override
-        public void onRunError(Exception e) {
-            Log.d(TAG, "Runner stopped.");
-        }
-
-        @Override
-        public void onNewData(final byte[] data) {
+/*
             ThermoActivity.this.updateReceivedData(data);
             ThermoActivity.this.runOnUiThread(new Runnable() {
                 @Override
@@ -66,10 +53,23 @@ public class ThermoActivity extends Activity {
                     //
                 }
             });
-        }
-    };
+*/
 
     private ThermoView view;
+    private String mDeviceID;
+    private BluetoothAdapter mBluetoothAdapter;
+    private BluetoothSocket mmSocket;
+    private InputStream mmInStream;
+    private OutputStream mmOutStream;
+    private BluetoothDevice mDevice;
+    
+    boolean escaped = false;
+    
+    int frameByteCount = 0;
+    int bytesRead = 0;
+
+    boolean writeToFrame = false;
+    private int[] ints = new int[512];
     
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -77,7 +77,11 @@ public class ThermoActivity extends Activity {
         view = new ThermoView(this);
         view.setBackgroundColor(Color.BLACK);
         setContentView(view);
-        mUsbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        
+        Intent i = this.getIntent();
+        mDeviceID = i.getStringExtra("bt_address");
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        mDevice = mBluetoothAdapter.getRemoteDevice(mDeviceID);
     }
     
     @Override
@@ -115,73 +119,64 @@ public class ThermoActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        stopIoManager();
-        if (mSerialDevice != null) {
-            try {
-                mSerialDevice.close();
-            } catch (IOException e) {
-                // Ignore.
-            }
-            mSerialDevice = null;
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        mSerialDevice = UsbSerialProber.acquire(mUsbManager);
-        Log.d(TAG, "Resumed, mSerialDevice=" + mSerialDevice);
-        if (mSerialDevice == null) {
-            Log.i(TAG, "No Serial Device");
-        } else {
-            try {
-                mSerialDevice.open();
-            } catch (IOException e) {
-                Log.e(TAG, "Error setting up device: " + e.getMessage(), e);
-                try {
-                    mSerialDevice.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
-                mSerialDevice = null;
-                return;
-            }
-            Log.i(TAG, "Serial device: "+mSerialDevice);
-        }
-        onDeviceStateChange();
-    }
 
-    private void stopIoManager() {
-        if (mSerialIoManager != null) {
-            Log.i(TAG, "Stopping io manager ..");
-            mSerialIoManager.stop();
-            mSerialIoManager = null;
+        
+        
+        try {
+            openConnection(mDevice.createInsecureRfcommSocketToServiceRecord(THERMO_UUID));
+        } catch (IOException e) {
+            Log.e(TAG, "Error setting up device: " + e.getMessage(), e);
         }
     }
-
-    private void startIoManager() {
-        if (mSerialDevice != null) {
-            Log.i(TAG, "Starting io manager ..");
-            mSerialIoManager = new SerialInputOutputManager(mSerialDevice, mListener);
-            mExecutor.submit(mSerialIoManager);
+    
+    @Override
+    protected void onDestroy() {
+        // TODO Auto-generated method stub
+        super.onDestroy();
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
         }
+    }
+    
+    private void openConnection(BluetoothSocket socket) {
+        mmSocket = socket;
+        
+        try {
+            mmSocket.connect();
+            mmInStream = mmSocket.getInputStream();
+            mmOutStream = mmSocket.getOutputStream();
+            
+            Thread thread = new Thread(null, this, "thermodroid");
+            thread.start();
+        } catch (IOException e) {
+            Log.e(TAG, "Error setting up device: " + e.getMessage(), e);
+        }
+        
     }
     
     private void sendCommand(byte flag) {
         byte[] command = new byte[1];
         command[0] = flag;
         try {
-            mSerialDevice.write(command, 1);
+            mmOutStream.write(command);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
         }
     }
-    private void onDeviceStateChange() {
-        stopIoManager();
-        startIoManager();
-    }
-    
+
     Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -192,59 +187,60 @@ public class ThermoActivity extends Activity {
         }
     };
     
-    boolean escaped = false;
-    
-    int frameByteCount = 0;
-    int bytesRead = 0;
 
-    boolean writeToFrame = false;
-    private int[] ints = new int[512];
 
-    private void updateReceivedData(byte[] data) {
+    @Override
+    public void run() {
         //final String message = "Read " + data.length + " bytes: \n"
                 //+ HexDump.dumpHexString(data) + "\n\n";
-       // Log.i(TAG, message);        
+       // Log.i(TAG, message); 
         
-        ByteBuffer inBuffer = ByteBuffer.wrap(data);
-        
-        while(inBuffer.hasRemaining()) {
+       
+        try {
             
-            int b = inBuffer.get() & 0xFF;
-            //Log.i("int",Integer.toString(b));
-            if (escaped) {
-                Log.i("frame","escaped");
-                //frame.put(b);
-                ints[frameByteCount++] = b;
-                escaped = false;
-                continue;
-            }
-            
-            switch (b) {
-            case ESCAPE:
-                escaped = true;
-                break;
-            case START_FLAG:
-                //frame.clear();
-                frameByteCount = 0;
-                ints = new int[512];
-                //we didn't actually read a byte
-                //but we used this byte to mark a new frame
-                break;
-            case END_FLAG:
-                Log.i("frame", "END");
-                //frame.flip();
-                Message m = Message.obtain(mHandler, NEW_FRAME);
-                m.obj = ints;
-                m.arg1 = frameByteCount;
-                mHandler.sendMessage(m);
-                //frame.clear();
-                //we really didn't read a byte
-                //but we have to push the counter
-                break;
-            default:
-                ints[frameByteCount++] = b;
-                //frame.put(b);
-            }
+            while(true) {
+               // Log.i("bytes", Integer.toString(mmInStream.available()));
+                //int b = inBuffer.get() & 0xFF;
+                int b = mmInStream.read() & 0xff;
+                //Log.i("int",Integer.toString(b));
+                if (escaped) {
+                    //Log.i("frame","escaped");
+                    //frame.put(b);
+                    ints[frameByteCount++] = b;
+                    escaped = false;
+                    continue;
+                }
+                
+                switch (b) {
+                case ESCAPE:
+                    escaped = true;
+                    break;
+                case START_FLAG:
+                    //frame.clear();
+                    frameByteCount = 0;
+                    ints = new int[512];
+                    //we didn't actually read a byte
+                    //but we used this byte to mark a new frame
+                    break;
+                case END_FLAG:
+                    //Log.i("frame", "END");
+                    //frame.flip();
+                    Message m = Message.obtain(mHandler, NEW_FRAME);
+                    m.obj = ints;
+                    m.arg1 = frameByteCount;
+                    mHandler.sendMessage(m);
+                    //frame.clear();
+                    //we really didn't read a byte
+                    //but we have to push the counter
+                    break;
+                default:
+                    ints[frameByteCount++] = b;
+                    //frame.put(b);
+                }
+           }
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
         }
         
     }

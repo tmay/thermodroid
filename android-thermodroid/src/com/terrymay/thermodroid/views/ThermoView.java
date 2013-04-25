@@ -56,7 +56,7 @@ public class ThermoView extends View {
     public void update(ThermoFrame data) {
         FloatBuffer readings = data.getTemps();
         avgTemp = data.getTempAvg();
-        Log.i("avg", Float.toString(avgTemp));
+        //Log.i("avg", Float.toString(avgTemp));
         readings.rewind();
         temps = new TempReading[64];
         for (int i = 0; i < 64; i++) {
